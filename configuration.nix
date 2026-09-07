@@ -1,4 +1,4 @@
-{ config, pkgs, callPackage, ... }:
+{ config, pkgs, ... }:
 
 {
   imports = [
@@ -11,7 +11,10 @@
   programs.nix-ld.libraries = with pkgs; [
     # Add any missing library programs here not in environment system pkgs
   ];
-
+  # Enable Bluetooth
+  hardware.bluetooth.enable = true;
+  hardware.bluetooth.powerOnBoot = true;
+  services.blueman.enable = true;
   # Enable Flakes
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
@@ -54,8 +57,7 @@
     XDG_SESSION_TYPE = "x11";
   };
 
-  # Graphics & Desktop (XFCE + LightDM on X11)
-  services.xserver = {
+ services.xserver = {
     enable = true;
     desktopManager.xfce.enable = true;
     displayManager.lightdm = {
@@ -64,9 +66,7 @@
     };
     videoDrivers = [ "nvidia" ];
   };
-  services.displayManager.defaultSession = "xfce";
-
-  # Ensure latest kernel & Intel Xe early module loading for Arrow Lake-S
+   # Ensure latest kernel & Intel Xe early module loading for Arrow Lake-S
   boot.kernelPackages = pkgs.linuxPackages_latest;
   boot.initrd.kernelModules = [ "xe" ];
 
