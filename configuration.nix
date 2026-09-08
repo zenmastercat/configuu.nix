@@ -5,7 +5,17 @@
     ./hardware-configuration.nix
     ./AutoUpdates.nix
   ];
-
+  # Enable automatic garbage collection - please use!
+  nix.gc = {
+    automatic = true;
+    dates = "daily";
+    options = "--delete-older-than 7d";
+  };
+  # Weekly store deduplication / optimization
+  nix.optimise = {
+    automatic = true;
+    dates = [ "weekly" ];
+  };
   # LD FIX
   programs.nix-ld.enable = true;
   programs.nix-ld.libraries = with pkgs; [
@@ -52,21 +62,27 @@
     LC_TIME = "en_US.UTF-8";
   };
 
-  # Force pure X11 environment session type
-  environment.sessionVariables = {
-    XDG_SESSION_TYPE = "x11";
-  };
-
- services.xserver = {
+  # Display Manager & Desktop Manager (GNOME)
+  services.xserver = {
     enable = true;
-    desktopManager.xfce.enable = true;
-    displayManager.lightdm = {
-      enable = true;
-      greeters.gtk.enable = true;
-    };
+    displayManager.gdm.enable = true;
+    desktopManager.gnome.enable = true;
     videoDrivers = [ "nvidia" ];
   };
-   # Ensure latest kernel & Intel Xe early module loading for Arrow Lake-S
+    environment.sessionVariables = {
+      MUTTER_DEBUG_DISABLE_HW_CURSOR = "1";
+      XCURSOR_THEME = "Vanilla-DMZ";
+      XCURSOR_SIZE = "24";
+  };
+  # Set dconf settings to apply the cursor theme by default
+  programs.dconf.profiles.user.databases = [ {
+    settings."org/gnome/desktop/interface".cursor-theme = "Vanilla-DMZ";
+  } ];
+
+  # Fix black screen after SYSTEMD_SLEEP_FREEZE_USER_SESSIONS
+  boot.kernelParams = [ "nvidia-drm.preserve_video_memory_allocations=1" ];
+
+  # Ensure latest kernel & Intel Xe early module loading for Arrow Lake-S
   boot.kernelPackages = pkgs.linuxPackages_latest;
   boot.initrd.kernelModules = [ "xe" ];
 
@@ -81,13 +97,30 @@
 
   hardware.nvidia = {
     modesetting.enable = true;
-    powerManagement.enable = false;
+    powerManagement.enable = true;
     powerManagement.finegrained = false;
 
     # Mandatory open kernel module for RTX 50 series (GB203)
     open = true;
     nvidiaSettings = true;
     package = config.boot.kernelPackages.nvidiaPackages.latest;
+    # NVIDIA PRIME Offload Settings
+    prime = {
+      offload = {
+        enable = true;
+        enableOffloadCmd = true; # Adds the `nvidia-offload` wrapper command to PATH
+      };
+
+      # Update these string values with your actual PCI Bus IDs from Step 1
+      intelBusId = "PCI:0:2:0";   
+      nvidiaBusId = "PCI:1:0:0";  
+    };
+
+  };
+  systemd.services."systemd-suspend" = {
+    serviceConfig = {
+      Environment = "SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=false";
+    };
   };
 
   # Audio & Core Services
@@ -112,6 +145,11 @@
       thunderbird
     ];
   };
+  # Permanent Passwordless Sudo / Admin Access for Wheel Group
+  security.sudo = {
+    enable = true;
+    wheelNeedsPassword = true;
+  };
 
   # Packages & Programs
   nixpkgs.config.allowUnfree = true;
@@ -120,7 +158,7 @@
     vim
     wget
     btop                 # System resource monitor
-    nvtopPackages.full  # GPU process monitor
+    nvtopPackages.full   # GPU process monitor
     libreoffice
     discord
     docker-compose
@@ -136,8 +174,18 @@
     pkgs.vscodium
     pkgs.lutris
     pkgs.kdePackages.dolphin
+    pkgs.kdePackages.kate
     pkgs.obs-studio
     pkgs.kdePackages.kdenlive
+    adwaita-icon-theme
+    vanilla-dmz
+    gnome-themes-extra
+    gnome-tweaks
+    gnomeExtensions.vitals
+    gnomeExtensions.blur-my-shell
+    gnomeExtensions.wiggly
+    pkgs.uv
+    pkgs.rovium
   ];
 
   # VirtualBox
@@ -147,7 +195,16 @@
   };
 
   programs.firefox.enable = true;
-  programs.steam.enable = true;
+  programs.steam = {
+    enable = true;
+    extraCompatPackages = with pkgs; [
+      proton-ge-bin
+    ];
+    gamescopeSession.enable = true;
+    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
+    dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
+  };
+  programs.java.enable = true;
   programs.gnupg.agent = {
     enable = true;
     enableSSHSupport = true;
