@@ -4,6 +4,8 @@
   imports = [
     ./hardware-configuration.nix
     ./AutoUpdates.nix
+    ./applications.nix
+    ./additionalServices.nix
   ];
   # Enable automatic garbage collection - please use!
   nix.gc = {
@@ -90,6 +92,7 @@
     enable = true;
     enable32Bit = true;
     extraPackages = with pkgs; [
+      intel-compute-runtime 
       intel-media-driver
       vpl-gpu-rt
     ];
@@ -131,6 +134,7 @@
     pulse.enable = true;
   };
   services.pulseaudio.enable = false;
+  hardware.enableAllFirmware = true;
   security.rtkit.enable = true;
   services.printing.enable = true;
   services.openssh.enable = true;
@@ -139,7 +143,7 @@
   users.users.lucas = {
     isNormalUser = true;
     description = "Lucas";
-    extraGroups = [ "networkmanager" "wheel" "docker" "vboxusers" ];
+    extraGroups = [ "audio" "networkmanager" "wheel" "docker" "vboxusers" ];
     packages = with pkgs; [
       mousepad
       thunderbird
@@ -149,114 +153,6 @@
   security.sudo = {
     enable = true;
     wheelNeedsPassword = true;
-  };
-
-  # Packages & Programs
-  nixpkgs.config.allowUnfree = true;
-  environment.systemPackages = with pkgs; [
-    git
-    vim
-    wget
-    btop                 # System resource monitor
-    nvtopPackages.full   # GPU process monitor
-    libreoffice
-    discord
-    docker-compose
-    obsidian
-    steam
-    typst         # Fast, modern academic paper renderer
-    texliveFull   # Complete LaTeX engine
-    pandoc        # Document conversion tool
-    pkgs.zed-editor-fhs
-    osu-lazer-bin
-    prismlauncher
-    fastfetch
-    pkgs.vscodium
-    pkgs.lutris
-    pkgs.kdePackages.dolphin
-    pkgs.kdePackages.kate
-    pkgs.obs-studio
-    pkgs.kdePackages.kdenlive
-    adwaita-icon-theme
-    vanilla-dmz
-    gnome-themes-extra
-    gnome-tweaks
-    gnomeExtensions.vitals
-    gnomeExtensions.blur-my-shell
-    gnomeExtensions.wiggly
-    pkgs.uv
-    pkgs.rovium
-  ];
-
-  # VirtualBox
-  virtualisation.virtualbox.host = {
-    enable = true;
-    enableExtensionPack = true;
-  };
-
-  programs.firefox.enable = true;
-  programs.steam = {
-    enable = true;
-    extraCompatPackages = with pkgs; [
-      proton-ge-bin
-    ];
-    gamescopeSession.enable = true;
-    remotePlay.openFirewall = true; # Open ports in the firewall for Steam Remote Play
-    dedicatedServer.openFirewall = true; # Open ports in the firewall for Source Dedicated Server
-  };
-  programs.java.enable = true;
-  programs.gnupg.agent = {
-    enable = true;
-    enableSSHSupport = true;
-  };
-
-  # Virtualisation (Docker)
-  virtualisation.docker.enable = true;
-
-  # SearXNG Service
-  services.searx = {
-    enable = true;
-    package = pkgs.searxng;
-    redisCreateLocally = true;
-    environmentFile = "/var/lib/searx/searxng.env";
-    settings = {
-      server = {
-        port = 8080;
-        bind_address = "127.0.0.1";
-      };
-      general = {
-        debug = false;
-        instance_name = "My SearXNG Engine";
-      };
-      search = {
-        safe_search = 0;
-        autocomplete = "google";
-      };
-    };
-  };
-
-  # Ollama Service (CUDA enabled for RTX 5080)
-  services.ollama = {
-    enable = true;
-    package = pkgs.ollama-cuda;
-    host = "0.0.0.0";
-    port = 11434;
-    environmentVariables = {
-      OLLAMA_ORIGINS = "*";
-    };
-  };
-
-  # ACME Security
-  security.acme = {
-    acceptTerms = true;
-    defaults.email = "lucas.chaleenon.poptie@gmail.com";
-  };
-
-  # Firewall
-  networking.firewall = {
-    enable = true;
-    allowedTCPPorts = [ 11434 ];
-    trustedInterfaces = [ "docker0" ];
   };
 
   system.stateVersion = "26.05";
