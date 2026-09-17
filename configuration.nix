@@ -4,26 +4,95 @@
   imports = [
     ./hardware-configuration.nix
     ./AutoUpdates.nix
-  ];
-  #LD FIX
-  programs.nix-ld.enable = true;
-  programs.nix-ld.libraries = with pkgs; [
-    #add any missing library
-    #programs here not in environment system pkgs
+    ./applications.nix
+    ./additionalServices.nix
   ];
 
-  # Enable Flakes
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  # Dynamic resource allocation for Intel Core Ultra 9
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+    max-jobs = "auto";
+    cores = 12; # Dynamically utilizes all P-cores and E-cores
+  };
 
-  # Bootloader
+  # Nix Store Cleanup & Optimization
+  nix.gc = {
+    automatic = true;
+    dates = "daily";
+    options = "--delete-older-than 7d";
+  };
+
+  nix.optimise = {
+    automatic = true;
+    dates = [ "weekly" ];
+  };
+
+  # Explicitly allow unfree packages for NVIDIA drivers
+  nixpkgs.config.allowUnfree = true;
+
+  # Bootloader Setup
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Networking
+  # Kernel Setup (Pinned to Linux 6.12 LTS for NVIDIA module compilation stability)
+  boot.kernelPackages = pkgs.linuxPackages_6_12;
+  boot.initrd.kernelModules = [ "xe" ];
+  boot.kernelParams = [ "nvidia-drm.modeset=1" ];
+
+  # Microcode & System Firmware Updates
+  hardware.cpu.intel.updateMicrocode = true;
+  hardware.enableAllFirmware = true;
+
+  # Graphics Acceleration
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+    extraPackages = with pkgs; [
+      intel-media-driver
+      vpl-gpu-rt
+      intel-compute-runtime
+    ];
+  };
+
+  # NVIDIA RTX 5080 Desktop Configuration
+  hardware.nvidia = {
+    modesetting.enable = true;
+    powerManagement.enable = true;
+    powerManagement.finegrained = false;
+    open = true; # Mandatory open-source kernel modules for RTX 50-series (Blackwell)
+    nvidiaSettings = true;
+    package = config.boot.kernelPackages.nvidiaPackages.beta;
+    
+    # NOTE: 'prime' block is completely removed because monitors are plugged directly into the dGPU.
+  };
+
+  # Desktop Environment (XFCE4 + LightDM on X11)
+  services.xserver = {
+    enable = true;
+    videoDrivers = [ "nvidia" ]; # Direct Xorg to render on the NVIDIA GPU
+    
+    displayManager.gdm.enable = false;
+    desktopManager.gnome.enable = false;
+    
+    displayManager.lightdm.enable = true;
+    desktopManager.xfce.enable = true;
+  };
+
+  services.displayManager.defaultSession = "xfce";
+
+  # Global X11 Environment Variables
+  environment.sessionVariables = {
+    NIXOS_OZONE_WL = "0";
+    GDK_BACKEND = "x11";
+    QT_QPA_PLATFORM = "xcb";
+    SDL_VIDEODRIVER = "x11";
+  };
+
+  # Networking & System Identification
   networking.hostName = "nixos";
   networking.networkmanager.enable = true;
 
-  # Time & Locale
+  # Time & Regional Settings
   time.timeZone = "Asia/Bangkok";
   i18n.defaultLocale = "en_US.UTF-8";
   i18n.extraLocaleSettings = {
@@ -38,27 +107,11 @@
     LC_TIME = "en_US.UTF-8";
   };
 
-  # Graphics & Desktop
-  services.xserver.enable = true;
-  services.xserver.videoDrivers = [ "nvidia" ];
-  services.xserver.xkb = {
-    layout = "us";
-    variant = "";
-  };
-  services.displayManager.sddm.enable = true;
-  services.desktopManager.plasma6.enable = true;
+  # Dynamic Binary Compatibility (Nix-LD)
+  programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [];
 
-  hardware.graphics.enable = true;
-  hardware.nvidia = {
-    modesetting.enable = true;
-    nvidiaSettings = true;
-    open = true;
-    package = config.boot.kernelPackages.nvidiaPackages.latest;
-    powerManagement.enable = false;
-    powerManagement.finegrained = false;
-  };
-
-  # Audio & Core Services
+  # Audio Stack
   services.pipewire = {
     enable = true;
     alsa.enable = true;
@@ -67,70 +120,40 @@
   };
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
+
+  # Bluetooth Configuration
+  hardware.bluetooth.enable = true;
+  hardware.bluetooth.powerOnBoot = true;
+  services.blueman.enable = true;
+
+  # Auxiliary System Services
   services.printing.enable = true;
   services.openssh.enable = true;
 
-  # User Account
+  # User Account Definition
   users.users.lucas = {
     isNormalUser = true;
     description = "Lucas";
-    extraGroups = [ "networkmanager" "wheel" "docker" ];
+    extraGroups = [ "audio" "networkmanager" "wheel" "docker" "vboxusers" ];
     packages = with pkgs; [
-      kdePackages.kate
+      mousepad
       thunderbird
     ];
   };
 
-  # Packages & Programs
-  nixpkgs.config.allowUnfree = true;
-  environment.systemPackages = with pkgs; [
-    git
-    vim
-    wget
-    btop
-    libreoffice
-    discord
-    docker-compose
-    steam
-  ];
-
-  programs.firefox.enable = true;
-  programs.steam.enable = true;
-  programs.gnupg.agent = {
+  # Privilege Elevation
+  security.sudo = {
     enable = true;
-    enableSSHSupport = true;
+    wheelNeedsPassword = true;
   };
 
-  # Virtualisation (Docker only)
-  virtualisation.docker.enable = true;
-
-  # SearXNG Service
-  services.searx = {
-    enable = true;
-    package = pkgs.searxng;
-    redisCreateLocally = true;
-    environmentFile = "/var/lib/searx/searxng.env";
-    settings = {
-      server = {
-        port = 8080;
-        bind_address = "127.0.0.1";
-      };
-      general = {
-        debug = false;
-        instance_name = "My SearXNG Engine";
-      };
-      search = {
-        safe_search = 0;
-        autocomplete = "google";
-      };
+  # Sleep Workaround
+  systemd.services."systemd-suspend" = {
+    serviceConfig = {
+      Environment = "SYSTEMD_SLEEP_FREEZE_USER_SESSIONS=false";
     };
   };
 
-  # ACME Security
-  security.acme = {
-    acceptTerms = true;
-    defaults.email = "lucas.chaleenon.poptie@gmail.com";
-  };
-
-  system.stateVersion = "26.05";
+  # System Release Version
+  system.stateVersion = "24.11";
 }
