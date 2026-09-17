@@ -2,10 +2,12 @@
 {
   home = {
     packages = with pkgs; [
-      cowsay lolcat
+        pkgs.gnumake
+        pkgs.gcc
+        cowsay lolcat
     ];
 
-    username = "Lucas";
+    username = "lucas";
     homeDirectory = "/home/lucas";
 
     stateVersion = "23.11";
