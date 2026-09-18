@@ -11,3 +11,7 @@ rebuild.home-manager:
 	git add .
 	sudo -u $(USER_NAME) -H home-manager switch --flake .#myprofile
 
+.PHONY: clean
+
+clean:
+	nix-collect-garbage -d
