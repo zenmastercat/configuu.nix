@@ -76,12 +76,6 @@
     
     displayManager.lightdm.enable = true;
     desktopManager.xfce.enable = true;
-    serverFlagsSection = ''
-      Option "BlankTime" "0"
-      Option "StandbyTime" "0"
-      Option "SuspendTime" "0"
-      Option "OffTime" "0"
-    '';
   };
 
   services.displayManager.defaultSession = "xfce";
@@ -121,17 +115,28 @@
   services.pipewire = {
     enable = true;
     alsa.enable = true;
-    alsa.support32Bit = true;
     pulse.enable = true;
+    wireplumber.enable = true;
   };
+  
   services.pulseaudio.enable = false;
   security.rtkit.enable = true;
 
   # Bluetooth Configuration
-  hardware.bluetooth.enable = true;
-  hardware.bluetooth.powerOnBoot = true;
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+    settings = {
+      General = {
+        FastConnectable = true;
+        Experimental = true; # Enables better codec support and battery reporting
+      };
+      Policy = {
+        AutoEnable = true;
+      };
+    };
+  };
   services.blueman.enable = true;
-
   # Auxiliary System Services
   services.printing.enable = true;
   services.openssh.enable = true;
